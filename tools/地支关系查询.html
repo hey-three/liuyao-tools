@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>十二地支 · 关系查询（六爻辅助）</title>
+<meta name="description" content="点击任一地支，查看六冲、六合、三合、相刑、相破、暗合关系">
+<style>
+:root{
+  --bg:#12141c; --panel:#1b1e2b; --border:#2c3148;
+  --text:#e9e5d8; --muted:#9aa0b5; --gold:#d4af37;
+  --c-chong:#ff4d5e; --c-he:#ffc53d; --c-sanhe:#36cfc9;
+  --c-xing:#b37feb; --c-po:#ff9c6e; --c-anhe:#ff7eb6;
+  --w-shui:#4a90d9; --w-mu:#4caf7d; --w-huo:#e05252; --w-tu:#c9a15a; --w-jin:#d8d8e0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:
+    radial-gradient(1100px 700px at 72% -10%, #232941 0%, transparent 60%),
+    radial-gradient(900px 600px at 0% 110%, #1c2033 0%, transparent 55%),
+    var(--bg);
+  color:var(--text);
+  font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;
+  min-height:100vh; display:flex; flex-direction:column;
+}
+/* ---------- 头部 ---------- */
+.app-header{text-align:center;padding:26px 16px 8px}
+.app-header h1{
+  font-family:"KaiTi","STKaiti","SimSun",serif;
+  font-size:clamp(26px,4vw,38px); letter-spacing:.12em; color:var(--gold);
+  text-shadow:0 2px 12px rgba(212,175,55,.25);
+}
+.seal{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:36px;height:36px;background:#a03030;color:#f5e9d8;border-radius:7px;
+  font-size:21px;margin-right:12px;vertical-align:-6px;letter-spacing:0;
+  box-shadow:0 2px 8px rgba(160,48,48,.4);transform:rotate(-4deg);
+}
+.app-header .sub{margin-top:9px;color:var(--muted);font-size:14px;letter-spacing:.1em}
+/* ---------- 布局 ---------- */
+.layout{
+  flex:1;display:flex;gap:26px;max-width:1180px;width:100%;margin:0 auto;
+  padding:18px 20px 30px;align-items:flex-start;justify-content:center;flex-wrap:wrap;
+}
+.dial-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;flex:0 1 auto}
+@media (min-width:980px){.dial-wrap{position:sticky;top:14px}}
+/* ---------- 圆盘 ---------- */
+.dial{
+  position:relative;width:min(88vw,520px);aspect-ratio:1/1;border-radius:50%;
+  background:radial-gradient(circle at 50% 42%, #20242f 0%, #171a24 62%, #131621 100%);
+  border:1px solid #343a52;
+  box-shadow:inset 0 0 60px rgba(0,0,0,.55), 0 10px 40px rgba(0,0,0,.45);
+}
+.dial::before{content:'';position:absolute;inset:7.5%;border-radius:50%;border:1px dashed #3b415c}
+.dial::after{content:'';position:absolute;inset:20%;border-radius:50%;border:1px dotted #333950}
+#lineLayer{position:absolute;inset:0;width:100%;height:100%;z-index:2;overflow:visible;pointer-events:none}
+.dial-center{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:31%;aspect-ratio:1/1;border-radius:50%;z-index:1;pointer-events:none;
+  background:radial-gradient(circle at 50% 38%, #262b3c, #191d2a 70%);
+  border:1px solid #3d4460;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  box-shadow:inset 0 0 24px rgba(0,0,0,.5);
+}
+.dial-center .zh{font-family:"KaiTi","STKaiti",serif;font-size:clamp(28px,6.5vmin,44px);line-height:1.1;color:var(--gold);font-weight:700}
+.dial-center .zi{font-size:12px;color:var(--muted);text-align:center;line-height:1.55;padding:0 10px}
+/* ---------- 地支节点 ---------- */
+[data-w="水"]{--wc:var(--w-shui)}
+[data-w="木"]{--wc:var(--w-mu)}
+[data-w="火"]{--wc:var(--w-huo)}
+[data-w="土"]{--wc:var(--w-tu)}
+[data-w="金"]{--wc:var(--w-jin)}
+.node{
+  position:absolute;transform:translate(-50%,-50%);z-index:3;
+  width:clamp(40px,9.6vmin,54px);aspect-ratio:1/1;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  font-family:"KaiTi","STKaiti",serif;font-weight:700;
+  font-size:clamp(20px,4.6vmin,28px);
+  color:var(--text);background:#1c2030;
+  border:2.5px solid var(--wc);
+  transition:transform .18s ease, box-shadow .18s ease;
+  user-select:none;-webkit-tap-highlight-color:transparent;
+}
+.node:hover{transform:translate(-50%,-50%) scale(1.12)}
+.node:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.node.sel{
+  transform:translate(-50%,-50%) scale(1.22);background:#2a2140;z-index:4;
+  box-shadow:0 0 0 3px rgba(212,175,55,.9), 0 0 22px rgba(212,175,55,.5);
+}
+.node.sel:hover{transform:translate(-50%,-50%) scale(1.22)}
+/* ---------- 关系连线 ---------- */
+#lineLayer path{fill:none;stroke-linecap:round;vector-effect:non-scaling-stroke;opacity:.92}
+#lineLayer .t-chong{stroke:var(--c-chong);stroke-width:2.6px;filter:drop-shadow(0 0 4px rgba(255,77,94,.55))}
+#lineLayer .t-he{stroke:var(--c-he);stroke-width:2.2px}
+#lineLayer .t-sanhe{stroke:var(--c-sanhe);stroke-width:2.2px}
+#lineLayer .t-xing{stroke:var(--c-xing);stroke-width:2.2px;stroke-dasharray:2 1.2}
+#lineLayer .t-po{stroke:var(--c-po);stroke-width:2px;stroke-dasharray:1.5 2}
+#lineLayer .t-anhe{stroke:var(--c-anhe);stroke-width:2.4px;stroke-dasharray:.2 1.6}
+#lineLayer circle.t-xing{fill:none;stroke:var(--c-xing);stroke-width:2px;stroke-dasharray:2 1.5;vector-effect:non-scaling-stroke;opacity:.92}
+#lineLayer.dim-others path, #lineLayer.dim-others circle{opacity:.12}
+#lineLayer.dim-others .lit{opacity:1}
+/* ---------- 图例 ---------- */
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:center;max-width:560px;font-size:12.5px;color:var(--muted)}
+.legend .lg-title{color:#6f7590;letter-spacing:.15em}
+.legend .li{display:flex;align-items:center;gap:5px}
+.legend .sw{width:11px;height:11px;border-radius:50%;box-shadow:0 0 6px rgba(0,0,0,.4)}
+/* ---------- 右侧面板 ---------- */
+.panel{
+  flex:1 1 400px;max-width:560px;min-width:min(94vw,400px);
+  background:var(--panel);border:1px solid var(--border);border-radius:14px;
+  padding:18px 18px 20px;box-shadow:0 8px 30px rgba(0,0,0,.35);
+}
+.hint-top{
+  text-align:center;font-weight:700;color:var(--gold);padding:10px 8px;
+  background:rgba(212,175,55,.07);border:1px dashed rgba(212,175,55,.35);
+  border-radius:10px;margin-bottom:14px;letter-spacing:.05em;line-height:1.7;
+}
+.branch-head{display:flex;align-items:center;gap:16px;padding:6px 4px 14px;border-bottom:1px solid #2f3450}
+.big-char{
+  width:72px;height:72px;border-radius:50%;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;
+  font-family:"KaiTi","STKaiti",serif;font-size:40px;font-weight:700;color:var(--text);
+  background:#20242f;border:2.5px solid var(--wc);box-shadow:0 0 16px rgba(0,0,0,.4);
+}
+.bmeta{display:flex;flex-direction:column;gap:7px;font-size:13.5px}
+.bmeta .row1{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mini{color:var(--muted);font-size:12.5px}
+.tag{padding:2px 10px;border-radius:20px;font-size:12.5px;font-weight:700;border:1px solid;letter-spacing:.05em}
+.tag[data-w="水"]{color:#8cc0f2;border-color:#3d6ea8;background:rgba(74,144,217,.14)}
+.tag[data-w="木"]{color:#7fd0a0;border-color:#358a61;background:rgba(76,175,125,.14)}
+.tag[data-w="火"]{color:#f09a9a;border-color:#a83a3a;background:rgba(224,82,82,.14)}
+.tag[data-w="土"]{color:#e0c08d;border-color:#96733a;background:rgba(201,161,90,.16)}
+.tag[data-w="金"]{color:#e6e8f0;border-color:#8a8fa5;background:rgba(216,216,224,.14)}
+.tag.yy{color:#cfd4e6;border-color:#4a5070;background:rgba(255,255,255,.06)}
+/* 关系分区 */
+.rel-sec{margin-top:12px;border-radius:10px;padding:10px 12px;border:1px solid var(--border)}
+.rel-sec[data-t="chong"]{--pc:var(--c-chong);background:rgba(255,77,94,.055)}
+.rel-sec[data-t="he"]{--pc:var(--c-he);background:rgba(255,197,61,.05)}
+.rel-sec[data-t="sanhe"]{--pc:var(--c-sanhe);background:rgba(54,207,201,.05)}
+.rel-sec[data-t="xing"]{--pc:var(--c-xing);background:rgba(179,127,235,.06)}
+.rel-sec[data-t="po"]{--pc:var(--c-po);background:rgba(255,156,110,.055)}
+.rel-sec[data-t="anhe"]{--pc:var(--c-anhe);background:rgba(255,126,182,.055)}
+.rel-sec h3{display:flex;align-items:center;gap:8px;font-size:15px;letter-spacing:.08em}
+.rel-sec h3 .dot{width:10px;height:10px;border-radius:50%;box-shadow:0 0 6px currentColor}
+.rel-sec h3 .cnt{font-size:11px;color:#6f7590;font-weight:400;margin-left:auto;letter-spacing:0}
+.rel-sec:hover .p-chip{box-shadow:0 0 10px var(--pc)}
+.partners{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin:9px 0 7px;min-height:36px}
+.p-chip{
+  width:38px;height:38px;border-radius:50%;border:2px solid var(--pc);
+  background:#20242f;color:var(--text);font-family:"KaiTi","STKaiti",serif;
+  font-size:20px;font-weight:700;cursor:pointer;transition:transform .15s, box-shadow .15s;
+}
+.p-chip:hover{transform:scale(1.14)}
+.none{color:#5d6377;font-size:13px}
+.self{font-size:14.5px;color:#c9b8ff;letter-spacing:.05em}
+.glabel{font-size:12.5px;color:var(--muted);border:1px solid #383e58;padding:3px 9px;border-radius:6px;background:rgba(255,255,255,.03)}
+.xnote{font-style:normal;font-size:12px;color:#d8b98a}
+.rdesc{font-size:12.5px;color:var(--muted);line-height:1.65}
+/* 总表模式 */
+.pair-list{display:flex;flex-wrap:wrap;gap:8px;margin:9px 0 7px}
+.pair{
+  font-family:"KaiTi","STKaiti",serif;font-size:17px;letter-spacing:.12em;
+  padding:4px 11px;border-radius:8px;background:#20242f;border:1px solid #333a55;
+}
+.pair i{font-style:normal;font-size:11.5px;color:var(--muted);margin-left:7px;letter-spacing:0;font-family:"Microsoft YaHei",sans-serif}
+/* 提示框 */
+.multi-warn{
+  margin-top:14px;padding:10px 13px;border-radius:10px;
+  background:rgba(255,159,110,.08);border:1px dashed rgba(255,159,110,.4);
+  color:#ffc9a8;font-size:13px;line-height:1.8;
+}
+.foot-note{margin-top:13px;font-size:12px;color:#7d8399;text-align:center;line-height:1.7}
+/* ---------- 页脚 ---------- */
+.app-footer{padding:4px 16px 24px;text-align:center;color:#7d8399;font-size:12.5px;line-height:1.8}
+.app-footer b{color:#c9b06a}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <h1><span class="seal">爻</span>十二地支 · 关系查询</h1>
+  <p class="sub">六爻解卦辅助 —— 六冲 · 六合 · 三合局 · 相刑 · 相破 · 暗合</p>
+</header>
+
+<main class="layout">
+  <section class="dial-wrap">
+    <div class="dial" id="dial">
+      <svg id="lineLayer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div class="dial-center" id="dialCenter"></div>
+      <!-- 地支节点由 JS 生成 -->
+    </div>
+    <div class="legend">
+      <span class="lg-title">关系</span>
+      <span class="li"><span class="sw" style="background:var(--c-chong)"></span>冲</span>
+      <span class="li"><span class="sw" style="background:var(--c-he)"></span>合</span>
+      <span class="li"><span class="sw" style="background:var(--c-sanhe)"></span>三合</span>
+      <span class="li"><span class="sw" style="background:var(--c-xing)"></span>刑</span>
+      <span class="li"><span class="sw" style="background:var(--c-po)"></span>破</span>
+      <span class="li"><span class="sw" style="background:var(--c-anhe)"></span>暗合</span>
+      <span class="lg-title">五行</span>
+      <span class="li"><span class="sw" style="background:var(--w-shui)"></span>水</span>
+      <span class="li"><span class="sw" style="background:var(--w-mu)"></span>木</span>
+      <span class="li"><span class="sw" style="background:var(--w-huo)"></span>火</span>
+      <span class="li"><span class="sw" style="background:var(--w-tu)"></span>土</span>
+      <span class="li"><span class="sw" style="background:var(--w-jin)"></span>金</span>
+    </div>
+  </section>
+
+  <aside class="panel" id="panel" aria-live="polite"></aside>
+</main>
+
+<footer class="app-footer">
+  <b>提示</b>：日辰冲安静之爻即为「暗动（暗冲）」，所用即六冲之支，故不单列。
+  再点击已选中的地支可返回总表。
+</footer>
+
+<script>
+/* ================= 数据区（地支与关系公式） ================= */
+
+// 十二地支基本信息：五行 / 阴阳（按支序奇偶）/ 方位 / 建月 / 时辰 / 藏干
+const BRANCHES = [
+  {n:'子', w:'水', y:'阳', fw:'北',   yue:'十一月', sc:'23:00–01:00', cg:'癸'},
+  {n:'丑', w:'土', y:'阴', fw:'东北', yue:'十二月', sc:'01:00–03:00', cg:'己 癸 辛'},
+  {n:'寅', w:'木', y:'阳', fw:'东北', yue:'正月',   sc:'03:00–05:00', cg:'甲 丙 戊'},
+  {n:'卯', w:'木', y:'阴', fw:'东',   yue:'二月',   sc:'05:00–07:00', cg:'乙'},
+  {n:'辰', w:'土', y:'阳', fw:'东南', yue:'三月',   sc:'07:00–09:00', cg:'戊 乙 癸'},
+  {n:'巳', w:'火', y:'阴', fw:'东南', yue:'四月',   sc:'09:00–11:00', cg:'丙 戊 庚'},
+  {n:'午', w:'火', y:'阳', fw:'南',   yue:'五月',   sc:'11:00–13:00', cg:'丁 己'},
+  {n:'未', w:'土', y:'阴', fw:'西南', yue:'六月',   sc:'13:00–15:00', cg:'己 丁 乙'},
+  {n:'申', w:'金', y:'阳', fw:'西南', yue:'七月',   sc:'15:00–17:00', cg:'庚 壬 戊'},
+  {n:'酉', w:'金', y:'阴', fw:'西',   yue:'八月',   sc:'17:00–19:00', cg:'辛'},
+  {n:'戌', w:'土', y:'阳', fw:'西北', yue:'九月',   sc:'19:00–21:00', cg:'戊 辛 丁'},
+  {n:'亥', w:'水', y:'阴', fw:'西北', yue:'十月',   sc:'21:00–23:00', cg:'壬 甲'},
+];
+const ORDER = BRANCHES.map(b => b.n);
+const BR_BY = Object.fromEntries(BRANCHES.map(b => [b.n, b]));
+
+// 六类关系公式：bend 为连线弯曲系数（正负分侧，避免同组连线重叠）
+const RELS = [
+  { t:'chong', name:'六冲', color:'var(--c-chong)', bend:0,
+    desc:'对宫相击，主变动、分散、冲动。静爻逢日辰冲为「暗动」，旺相动爻逢冲则散。',
+    groups:[ {m:['子','午']}, {m:['丑','未']}, {m:['寅','申']}, {m:['卯','酉']},
+             {m:['辰','戌']}, {m:['巳','亥']} ] },
+  { t:'he', name:'六合', color:'var(--c-he)', bend:.17,
+    desc:'阴阳相吸，主合好、约定、绊住。动而逢合则被绊住，事有迟滞。',
+    groups:[ {m:['子','丑']}, {m:['寅','亥']}, {m:['卯','戌']}, {m:['辰','酉']},
+             {m:['巳','申']}, {m:['午','未']} ] },
+  { t:'sanhe', name:'三合局', color:'var(--c-sanhe)', bend:.11,
+    desc:'长生、帝旺、墓库三支结党，其力专一。局成则该五行之势强旺。',
+    groups:[ {m:['申','子','辰'], label:'水局'}, {m:['寅','午','戌'], label:'火局'},
+             {m:['巳','酉','丑'], label:'金局'}, {m:['亥','卯','未'], label:'木局'} ] },
+  { t:'xing', name:'相刑', color:'var(--c-xing)', bend:-.17,
+    desc:'主刑罚、伤损、纠葛、不谐。刑非吉神，凡事多不顺。',
+    groups:[ {m:['子','卯'], label:'无礼之刑'}, {m:['寅','巳','申'], label:'恃势之刑'},
+             {m:['丑','戌','未'], label:'无恩之刑'},
+             {m:['辰','辰'], label:'自刑'}, {m:['午','午'], label:'自刑'},
+             {m:['酉','酉'], label:'自刑'}, {m:['亥','亥'], label:'自刑'} ] },
+  { t:'po', name:'相破', color:'var(--c-po)', bend:-.26,
+    desc:'主破坏、破损、离析，其力较冲为轻；合处逢破，须细辨吉凶。',
+    groups:[ {m:['子','酉']}, {m:['卯','午']}, {m:['辰','丑']}, {m:['未','戌']},
+             {m:['寅','亥']}, {m:['巳','申']} ] },
+  { t:'anhe', name:'暗合', color:'var(--c-anhe)', bend:.30,
+    desc:'藏干暗中相合，主暗中私通、密约，明面不见而暗中有情。',
+    groups:[ {m:['寅','丑'], label:'甲己合'}, {m:['卯','申'], label:'乙庚合'},
+             {m:['午','亥'], label:'丁壬合'} ] },
+];
+const REL_BY = Object.fromEntries(RELS.map(r => [r.t, r]));
+
+// 两支之间的全部关系类型（自刑除外）
+function relTypesBetween(a, b){
+  if(a === b) return [];
+  return RELS.filter(r => r.groups.some(g => g.m.includes(a) && g.m.includes(b))).map(r => r.t);
+}
+
+/* ================= 圆盘几何：子上、午下、卯东、酉西（上南下北） ================= */
+
+const POS = {};
+ORDER.forEach((b, i) => {
+  const rad = (180 + i * 30) * Math.PI / 180;
+  POS[b] = { x: 50 + 40 * Math.sin(rad), y: 50 - 40 * Math.cos(rad) };
+});
+
+/* ================= 渲染 ================= */
+
+const dial = document.getElementById('dial');
+const lineLayer = document.getElementById('lineLayer');
+const dialCenter = document.getElementById('dialCenter');
+const panel = document.getElementById('panel');
+const NODES = {};
+
+// 生成 12 个地支节点
+ORDER.forEach(b => {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'node';
+  el.dataset.b = b;
+  el.dataset.w = BR_BY[b].w;
+  el.textContent = b;
+  el.title = `${b} · ${BR_BY[b].y}${BR_BY[b].w} · ${BR_BY[b].fw}方`;
+  el.style.left = POS[b].x + '%';
+  el.style.top = POS[b].y + '%';
+  el.addEventListener('click', () => select(sel === b ? null : b));
+  dial.appendChild(el);
+  NODES[b] = el;
+});
+
+let sel = null;
+
+function select(b){
+  sel = b;
+  Object.values(NODES).forEach(n => { n.classList.remove('sel'); n.style.boxShadow = ''; });
+  if(b){
+    NODES[b].classList.add('sel');
+    // 相关地支加彩色环（多重关系多层环）
+    const ringMap = {};
+    for(const r of RELS){
+      for(const g of r.groups){
+        if(!g.m.includes(b)) continue;
+        const members = [...new Set(g.m)];
+        if(members.length === 1) continue; // 自刑：画圈线，不加环
+        for(const m of members){
+          if(m === b) continue;
+          (ringMap[m] = ringMap[m] || []).push(r);
+        }
+      }
+    }
+    for(const [m, rs] of Object.entries(ringMap)){
+      NODES[m].style.boxShadow = rs.map((r, i) => `0 0 0 ${(i + 1) * 3.5}px ${r.color}`).join(',');
+      NODES[m].title = `${m} · 与${b}：${rs.map(r => r.name).join('、')}`;
+    }
+  }
+  renderLines(b);
+  renderCenter(b);
+  renderPanel(b);
+}
+
+function renderCenter(b){
+  dialCenter.innerHTML = b
+    ? `<div class="zh">${b}</div><div class="zi">${BR_BY[b].y}${BR_BY[b].w}<br>点击他支切换</div>`
+    : `<div class="zh" style="font-size:26px">地支</div><div class="zi">点击任一支<br>查询关系</div>`;
+}
+
+/* ---------- SVG 连线 ---------- */
+const NS = 'http://www.w3.org/2000/svg';
+
+function curvePath(p, q, bend){
+  const dx = q.x - p.x, dy = q.y - p.y, len = Math.hypot(dx, dy) || 1;
+  const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2;
+  const off = bend * len; // 垂直于弦的偏移
+  return `M${p.x} ${p.y} Q${mx - dy / len * off} ${my + dx / len * off} ${q.x} ${q.y}`;
+}
+
+function renderLines(b){
+  lineLayer.innerHTML = '';
+  lineLayer.classList.remove('dim-others');
+  if(!b) return;
+  for(const r of RELS){
+    for(const g of r.groups){
+      if(!g.m.includes(b)) continue;
+      const members = [...new Set(g.m)];
+      if(members.length === 1){ // 自刑：节点外画虚线圈
+        const c = document.createElementNS(NS, 'circle');
+        c.setAttribute('cx', POS[b].x); c.setAttribute('cy', POS[b].y);
+        c.setAttribute('r', 7.2); c.setAttribute('class', 't-xing');
+        lineLayer.appendChild(c);
+        continue;
+      }
+      // 组内两两连线（三合/三刑构成三角）
+      const pts = members.map(m => POS[m]);
+      for(let i = 0; i < pts.length; i++){
+        for(let j = i + 1; j < pts.length; j++){
+          const p = document.createElementNS(NS, 'path');
+          p.setAttribute('d', curvePath(pts[i], pts[j], r.bend));
+          p.setAttribute('class', 't-' + r.t);
+          lineLayer.appendChild(p);
+        }
+      }
+    }
+  }
+}
+
+/* ---------- 右侧面板 ---------- */
+
+function renderPanel(b){
+  if(!b){
+    // 默认：完整关系总表
+    let h = `<div class="hint-top">👆 点击左侧圆盘任意地支<br>查看它与所有地支的 冲 · 合 · 刑 · 破 关系</div>`;
+    for(const r of RELS){
+      const cnt = new Set(r.groups.flatMap(g => g.m)).size;
+      const items = r.groups.map(g => {
+        const uniq = [...new Set(g.m)];
+        const txt = uniq.length === 1 ? `${uniq[0]}见${uniq[0]}` : uniq.join('');
+        const lab = (g.label && uniq.length > 1) ? `<i>${g.label}</i>` : '';
+        return `<span class="pair">${txt}${lab}</span>`;
+      }).join('');
+      h += `<section class="rel-sec" data-t="${r.t}">
+        <h3><span class="dot" style="background:${r.color};color:${r.color}"></span>${r.name}
+            <span class="cnt">${cnt}支 · ${r.groups.length}组</span></h3>
+        <div class="pair-list">${items}</div>
+        <p class="rdesc">${r.desc}</p>
+      </section>`;
+    }
+    h += `<p class="foot-note">注：「暗冲（暗动）」即日辰冲静爻，所用即六冲之支，故不单列。</p>`;
+    panel.innerHTML = h;
+    return;
+  }
+
+  // 选中某一地支：基本信息 + 六类关系
+  const B = BR_BY[b];
+  let h = `
+  <div class="branch-head">
+    <div class="big-char" data-w="${B.w}">${b}</div>
+    <div class="bmeta">
+      <div class="row1">
+        <span class="tag yy">${B.y}</span><span class="tag" data-w="${B.w}">${B.w}</span>
+        <span class="mini">${B.fw}方 · ${B.yue} · ${B.sc}时</span>
+      </div>
+      <div class="mini">藏干：${B.cg}</div>
+      <div class="mini">点击下方关系中的地支，可继续切换查询</div>
+    </div>
+  </div>`;
+
+  for(const r of RELS){
+    const hits = r.groups.filter(g => g.m.includes(b));
+    let inner;
+    if(!hits.length){
+      inner = `<span class="none">无</span>`;
+    } else {
+      inner = hits.map(g => {
+        const uniq = [...new Set(g.m)];
+        if(uniq.length === 1) return `<span class="self">${b}见${b}自刑</span>`;
+        const others = uniq.filter(x => x !== b);
+        const chips = others.map(o => {
+          const extra = relTypesBetween(b, o).filter(t => t !== r.t).map(t => REL_BY[t].name);
+          return `<button class="p-chip" data-goto="${o}" style="--pc:${r.color}" title="${b}${o}">${o}</button>` +
+                 (extra.length ? `<em class="xnote">又${extra.join('、')}</em>` : '');
+        }).join('');
+        const lab = `<span class="glabel">${uniq.join('')}${g.label ? ' · ' + g.label : ''}</span>`;
+        return chips + lab;
+      }).join('');
+    }
+    h += `<section class="rel-sec" data-t="${r.t}">
+      <h3><span class="dot" style="background:${r.color};color:${r.color}"></span>${r.name}</h3>
+      <div class="partners">${inner}</div>
+      <p class="rdesc">${r.desc}</p>
+    </section>`;
+  }
+
+  // 多重关系提示（如 巳申：合中带刑破）
+  const warns = [];
+  for(const o of ORDER){
+    if(o === b) continue;
+    const ts = relTypesBetween(b, o).map(t => REL_BY[t].name);
+    if(ts.length >= 2) warns.push(`「${b} ↔ ${o}」${ts.join('＋')}`);
+  }
+  if(warns.length){
+    h += `<div class="multi-warn"><b>⚠ 多重关系提示：</b>${warns.join('；')} —— 合中带刑破，解卦须细辨。</div>`;
+  }
+  h += `<p class="foot-note">注：暗冲（暗动）即日辰冲静爻，所用即六冲之支。</p>`;
+  panel.innerHTML = h;
+}
+
+/* ---------- 面板交互 ---------- */
+
+// 点击结果中的地支 → 切换查询
+panel.addEventListener('click', e => {
+  const t = e.target.closest('[data-goto]');
+  if(t) select(t.dataset.goto);
+});
+
+// 悬停关系分区 → 圆盘上突出该类连线
+function clearLineFocus(){
+  lineLayer.classList.remove('dim-others');
+  lineLayer.querySelectorAll('.lit').forEach(el => el.classList.remove('lit'));
+}
+panel.addEventListener('mouseover', e => {
+  const sec = e.target.closest('.rel-sec');
+  if(!sec){ clearLineFocus(); return; }
+  const t = sec.dataset.t;
+  lineLayer.classList.add('dim-others');
+  lineLayer.querySelectorAll('path, circle').forEach(el => {
+    el.classList.toggle('lit', el.classList.contains('t-' + t));
+  });
+});
+panel.addEventListener('mouseleave', clearLineFocus);
+
+/* ---------- 初始化：总表模式 ---------- */
+select(null);
+</script>
+</body>
+</html>

@@ -104,6 +104,50 @@ body{
 .legend .lg-title{color:#6f7590;letter-spacing:.15em}
 .legend .li{display:flex;align-items:center;gap:5px}
 .legend .sw{width:11px;height:11px;border-radius:50%;box-shadow:0 0 6px rgba(0,0,0,.4)}
+.legend .li[data-t].off{opacity:.32}
+.legend .li[data-t].off .sw{filter:grayscale(1)}
+/* ---------- 显示开关（圆盘左列） ---------- */
+.switch-col{
+  display:flex;flex-direction:column;gap:8px;align-items:stretch;
+  flex:0 0 124px;padding:12px 10px;
+  background:var(--panel);border:1px solid var(--border);border-radius:14px;
+  box-shadow:0 8px 30px rgba(0,0,0,.35);
+}
+@media (min-width:980px){.switch-col{position:sticky;top:14px}}
+.sb-title{font-size:12.5px;color:var(--gold);letter-spacing:.15em;font-weight:700;text-align:center;margin-bottom:2px}
+.sw-item{
+  display:flex;align-items:center;gap:6px;width:100%;cursor:pointer;user-select:none;
+  padding:4px 8px;border-radius:20px;border:1px solid #383e58;
+  background:rgba(255,255,255,.03);-webkit-tap-highlight-color:transparent;
+}
+.sw-item input{position:absolute;opacity:0;width:0;height:0;pointer-events:none}
+.sw-ui{width:28px;height:15px;border-radius:10px;background:#3a3f5c;position:relative;flex:0 0 auto;transition:background .18s}
+.sw-ui::after{
+  content:'';position:absolute;left:2px;top:2px;width:11px;height:11px;border-radius:50%;
+  background:#8a90a8;transition:transform .18s, background .18s;
+}
+.sw-item input:checked + .sw-ui{background:var(--pc)}
+.sw-item input:checked + .sw-ui::after{transform:translateX(13px);background:#fff}
+.sw-item input:focus-visible + .sw-ui{outline:2px solid var(--gold);outline-offset:2px}
+.sw-name{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.sw-item input:checked ~ .sw-name{color:var(--pc);font-weight:700}
+.sw-all{
+  margin-top:4px;width:100%;font-size:12px;color:var(--muted);cursor:pointer;
+  background:none;border:1px dashed #4a5070;border-radius:8px;padding:5px 0;
+}
+.sw-all:hover{color:var(--gold);border-color:var(--gold)}
+@media (max-width:780px){
+  /* 窄屏：开关变横向一行置顶，避免与圆盘/面板挤压遮挡 */
+  .switch-col{flex-direction:row;flex-wrap:wrap;justify-content:center;align-items:center;
+    flex:1 1 100%;max-width:560px;margin:0 auto}
+  .sw-item{width:auto}
+  .sw-all{width:auto;padding:3px 11px;margin:0 0 0 6px}
+}
+.all-off-hint{
+  text-align:center;font-weight:700;color:#ffc9a8;padding:12px 10px;
+  background:rgba(255,159,110,.08);border:1px dashed rgba(255,159,110,.4);
+  border-radius:10px;margin-top:12px;line-height:1.8;
+}
 /* ---------- 右侧面板 ---------- */
 .panel{
   flex:1 1 400px;max-width:560px;min-width:min(94vw,400px);
@@ -183,6 +227,12 @@ body{
 </header>
 
 <main class="layout">
+  <aside class="switch-col" id="switchCol">
+    <span class="sb-title">显示开关</span>
+    <!-- 关系开关由 JS 生成，状态自动记忆 -->
+    <button type="button" class="sw-all" id="swAll">全开</button>
+  </aside>
+
   <section class="dial-wrap">
     <div class="dial" id="dial">
       <svg id="lineLayer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
@@ -191,12 +241,12 @@ body{
     </div>
     <div class="legend">
       <span class="lg-title">关系</span>
-      <span class="li"><span class="sw" style="background:var(--c-chong)"></span>冲</span>
-      <span class="li"><span class="sw" style="background:var(--c-he)"></span>合</span>
-      <span class="li"><span class="sw" style="background:var(--c-sanhe)"></span>三合</span>
-      <span class="li"><span class="sw" style="background:var(--c-xing)"></span>刑</span>
-      <span class="li"><span class="sw" style="background:var(--c-po)"></span>破</span>
-      <span class="li"><span class="sw" style="background:var(--c-anhe)"></span>暗合</span>
+      <span class="li" data-t="he"><span class="sw" style="background:var(--c-he)"></span>合</span>
+      <span class="li" data-t="chong"><span class="sw" style="background:var(--c-chong)"></span>冲</span>
+      <span class="li" data-t="sanhe"><span class="sw" style="background:var(--c-sanhe)"></span>三合</span>
+      <span class="li" data-t="xing"><span class="sw" style="background:var(--c-xing)"></span>刑</span>
+      <span class="li" data-t="po"><span class="sw" style="background:var(--c-po)"></span>破</span>
+      <span class="li" data-t="anhe"><span class="sw" style="background:var(--c-anhe)"></span>暗合</span>
       <span class="lg-title">五行</span>
       <span class="li"><span class="sw" style="background:var(--w-shui)"></span>水</span>
       <span class="li"><span class="sw" style="background:var(--w-mu)"></span>木</span>
@@ -206,12 +256,14 @@ body{
     </div>
   </section>
 
-  <aside class="panel" id="panel" aria-live="polite"></aside>
+  <aside class="panel" id="panel" aria-live="polite">
+    <div id="panelBody"></div>
+  </aside>
 </main>
 
 <footer class="app-footer">
   <b>提示</b>：日辰冲安静之爻即为「暗动（暗冲）」，所用即六冲之支，故不单列。
-  再点击已选中的地支可返回总表。
+  再点击已选中的地支可返回总表。开关状态自动记忆，下次打开保持上次设置。
 </footer>
 
 <script>
@@ -237,14 +289,14 @@ const BR_BY = Object.fromEntries(BRANCHES.map(b => [b.n, b]));
 
 // 六类关系公式：bend 为连线弯曲系数（正负分侧，避免同组连线重叠）
 const RELS = [
-  { t:'chong', name:'六冲', color:'var(--c-chong)', bend:0,
-    desc:'对宫相击，主变动、分散、冲动。静爻逢日辰冲为「暗动」，旺相动爻逢冲则散。',
-    groups:[ {m:['子','午']}, {m:['丑','未']}, {m:['寅','申']}, {m:['卯','酉']},
-             {m:['辰','戌']}, {m:['巳','亥']} ] },
   { t:'he', name:'六合', color:'var(--c-he)', bend:.17,
     desc:'阴阳相吸，主合好、约定、绊住。动而逢合则被绊住，事有迟滞。',
     groups:[ {m:['子','丑']}, {m:['寅','亥']}, {m:['卯','戌']}, {m:['辰','酉']},
              {m:['巳','申']}, {m:['午','未']} ] },
+  { t:'chong', name:'六冲', color:'var(--c-chong)', bend:0,
+    desc:'对宫相击，主变动、分散、冲动。静爻逢日辰冲为「暗动」，旺相动爻逢冲则散。',
+    groups:[ {m:['子','午']}, {m:['丑','未']}, {m:['寅','申']}, {m:['卯','酉']},
+             {m:['辰','戌']}, {m:['巳','亥']} ] },
   { t:'sanhe', name:'三合局', color:'var(--c-sanhe)', bend:.11,
     desc:'长生、帝旺、墓库三支结党，其力专一。局成则该五行之势强旺。',
     groups:[ {m:['申','子','辰'], label:'水局'}, {m:['寅','午','戌'], label:'火局'},
@@ -266,6 +318,23 @@ const RELS = [
 ];
 const REL_BY = Object.fromEntries(RELS.map(r => [r.t, r]));
 
+/* ---------- 显示开关状态（localStorage 记忆：恢复上次的开关设置） ---------- */
+const LS_KEY = 'li-dizhi-rel-vis';
+function loadVis(){
+  // 无历史记录时默认全开；有记录则完全按上次保存的状态恢复
+  try{
+    const saved = JSON.parse(localStorage.getItem(LS_KEY));
+    if(saved && typeof saved === 'object'){
+      return Object.fromEntries(RELS.map(r => [r.t, saved[r.t] !== false]));
+    }
+  }catch(e){ /* 存储不可用时静默降级为默认全开 */ }
+  return Object.fromEntries(RELS.map(r => [r.t, true]));
+}
+const VIS = loadVis();
+function saveVis(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(VIS)); }catch(e){ /* 忽略存储异常 */ }
+}
+
 // 两支之间的全部关系类型（自刑除外）
 function relTypesBetween(a, b){
   if(a === b) return [];
@@ -286,7 +355,52 @@ const dial = document.getElementById('dial');
 const lineLayer = document.getElementById('lineLayer');
 const dialCenter = document.getElementById('dialCenter');
 const panel = document.getElementById('panel');
+const panelBody = document.getElementById('panelBody');
+const switchCol = document.getElementById('switchCol');
+const swAllBtn = document.getElementById('swAll');
 const NODES = {};
+
+/* ---------- 显示开关栏：生成 + 事件 + 图例联动 ---------- */
+
+// 依据 VIS 生成六类关系的开关（开关本体颜色对应关系色）
+RELS.forEach(r => {
+  const lab = document.createElement('label');
+  lab.className = 'sw-item';
+  lab.style.setProperty('--pc', r.color);
+  lab.title = `${r.name}：${VIS[r.t] ? '显示中，点击隐藏' : '已隐藏，点击显示'}`;
+  lab.innerHTML =
+    `<input type="checkbox" data-t="${r.t}" ${VIS[r.t] ? 'checked' : ''}>` +
+    `<span class="sw-ui"></span><span class="sw-name">${r.name}</span>`;
+  switchCol.insertBefore(lab, swAllBtn);
+});
+
+// 单个开关：切换 → 保存 → 整体刷新（连线 / 圆环 / 面板 / 图例）
+switchCol.addEventListener('change', e => {
+  const t = e.target.dataset && e.target.dataset.t;
+  if(!t) return;
+  VIS[t] = e.target.checked;
+  saveVis();
+  syncLegend();
+  select(sel); // 重新渲染当前视图
+});
+
+// 全开 / 全关
+swAllBtn.addEventListener('click', () => {
+  const turnOn = RELS.some(r => !VIS[r.t]); // 只要有任一关闭，就全部打开；否则全部关闭
+  RELS.forEach(r => VIS[r.t] = turnOn);
+  saveVis();
+  switchCol.querySelectorAll('input[data-t]').forEach(cb => cb.checked = turnOn);
+  syncLegend();
+  select(sel);
+});
+
+// 图例与「全开/全关」按钮文案随状态联动
+function syncLegend(){
+  document.querySelectorAll('.legend .li[data-t]').forEach(el => {
+    el.classList.toggle('off', !VIS[el.dataset.t]);
+  });
+  swAllBtn.textContent = RELS.every(r => VIS[r.t]) ? '全关' : '全开';
+}
 
 // 生成 12 个地支节点
 ORDER.forEach(b => {
@@ -314,6 +428,7 @@ function select(b){
     // 相关地支加彩色环（多重关系多层环）
     const ringMap = {};
     for(const r of RELS){
+      if(!VIS[r.t]) continue; // 已关闭的关系：不加圆环
       for(const g of r.groups){
         if(!g.m.includes(b)) continue;
         const members = [...new Set(g.m)];
@@ -355,6 +470,7 @@ function renderLines(b){
   lineLayer.classList.remove('dim-others');
   if(!b) return;
   for(const r of RELS){
+    if(!VIS[r.t]) continue; // 已关闭的关系：不画连线
     for(const g of r.groups){
       if(!g.m.includes(b)) continue;
       const members = [...new Set(g.m)];
@@ -383,9 +499,12 @@ function renderLines(b){
 
 function renderPanel(b){
   if(!b){
-    // 默认：完整关系总表
-    let h = `<div class="hint-top">👆 点击左侧圆盘任意地支<br>查看它与所有地支的 冲 · 合 · 刑 · 破 关系</div>`;
+    // 默认：完整关系总表（仅显示已开启的关系类型）
+    let h = `<div class="hint-top">👆 点击左侧圆盘任意地支，查看它的全部关系<br>「显示开关」可控制各类关系显示 · 开关状态自动记忆</div>`;
+    let shown = 0;
     for(const r of RELS){
+      if(!VIS[r.t]) continue;
+      shown++;
       const cnt = new Set(r.groups.flatMap(g => g.m)).size;
       const items = r.groups.map(g => {
         const uniq = [...new Set(g.m)];
@@ -400,8 +519,12 @@ function renderPanel(b){
         <p class="rdesc">${r.desc}</p>
       </section>`;
     }
-    h += `<p class="foot-note">注：「暗冲（暗动）」即日辰冲静爻，所用即六冲之支，故不单列。</p>`;
-    panel.innerHTML = h;
+    if(!shown){
+      h += `<div class="all-off-hint">🔒 所有关系类型均已关闭<br>请在上方「显示开关」中开启需要显示的关系</div>`;
+    } else {
+      h += `<p class="foot-note">注：「暗冲（暗动）」即日辰冲静爻，所用即六冲之支，故不单列。</p>`;
+    }
+    panelBody.innerHTML = h;
     return;
   }
 
@@ -420,7 +543,10 @@ function renderPanel(b){
     </div>
   </div>`;
 
+  let shown = 0;
   for(const r of RELS){
+    if(!VIS[r.t]) continue; // 已关闭的关系：整个分区不显示
+    shown++;
     const hits = r.groups.filter(g => g.m.includes(b));
     let inner;
     if(!hits.length){
@@ -431,7 +557,7 @@ function renderPanel(b){
         if(uniq.length === 1) return `<span class="self">${b}见${b}自刑</span>`;
         const others = uniq.filter(x => x !== b);
         const chips = others.map(o => {
-          const extra = relTypesBetween(b, o).filter(t => t !== r.t).map(t => REL_BY[t].name);
+          const extra = relTypesBetween(b, o).filter(t => VIS[t] && t !== r.t).map(t => REL_BY[t].name);
           return `<button class="p-chip" data-goto="${o}" style="--pc:${r.color}" title="${b}${o}">${o}</button>` +
                  (extra.length ? `<em class="xnote">又${extra.join('、')}</em>` : '');
         }).join('');
@@ -445,19 +571,22 @@ function renderPanel(b){
       <p class="rdesc">${r.desc}</p>
     </section>`;
   }
+  if(!shown){
+    h += `<div class="all-off-hint">🔒 所有关系类型均已关闭<br>请在上方「显示开关」中开启需要显示的关系</div>`;
+  }
 
-  // 多重关系提示（如 巳申：合中带刑破）
+  // 多重关系提示（如 巳申：合中带刑破）——仅统计已开启的关系
   const warns = [];
   for(const o of ORDER){
     if(o === b) continue;
-    const ts = relTypesBetween(b, o).map(t => REL_BY[t].name);
+    const ts = relTypesBetween(b, o).filter(t => VIS[t]).map(t => REL_BY[t].name);
     if(ts.length >= 2) warns.push(`「${b} ↔ ${o}」${ts.join('＋')}`);
   }
   if(warns.length){
     h += `<div class="multi-warn"><b>⚠ 多重关系提示：</b>${warns.join('；')} —— 合中带刑破，解卦须细辨。</div>`;
   }
   h += `<p class="foot-note">注：暗冲（暗动）即日辰冲静爻，所用即六冲之支。</p>`;
-  panel.innerHTML = h;
+  panelBody.innerHTML = h;
 }
 
 /* ---------- 面板交互 ---------- */
@@ -484,7 +613,8 @@ panel.addEventListener('mouseover', e => {
 });
 panel.addEventListener('mouseleave', clearLineFocus);
 
-/* ---------- 初始化：总表模式 ---------- */
+/* ---------- 初始化：总表模式（开关状态由 localStorage 恢复） ---------- */
+syncLegend();
 select(null);
 </script>
 </body>

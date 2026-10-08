@@ -136,12 +136,42 @@ body{
   background:none;border:1px dashed #4a5070;border-radius:8px;padding:5px 0;
 }
 .sw-all:hover{color:var(--gold);border-color:var(--gold)}
+/* ---------- 地支筛选（选支模式） ---------- */
+.sb-divider{border:0;border-top:1px solid #2f3450;margin:9px 0 3px;width:100%}
+.pick-grid{display:none;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:8px}
+.switch-col.pick-on .pick-grid{display:grid}
+.pick-ops{display:none;gap:6px;margin-top:7px}
+.switch-col.pick-on .pick-ops{display:flex}
+.pick-ops .sw-all{flex:1;margin:0}
+.pick{
+  aspect-ratio:1/1;border-radius:50%;border:1.5px solid var(--wc);
+  background:#1c2030;color:var(--muted);font-family:"KaiTi","STKaiti",serif;
+  font-weight:700;font-size:14.5px;cursor:pointer;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .15s, box-shadow .15s, color .15s, border-color .15s;
+  -webkit-tap-highlight-color:transparent;
+}
+.pick:hover{transform:scale(1.12)}
+.pick:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.pick.on{background:#2a2140;color:var(--gold);border-color:var(--gold);
+  box-shadow:0 0 8px rgba(212,175,55,.45)}
+/* 圆盘节点在选支模式下的两种状态 */
+.node.dim{opacity:.22}
+.node.pick-sel{
+  background:#2a2140;z-index:4;
+  box-shadow:0 0 0 3px rgba(212,175,55,.85), 0 0 20px rgba(212,175,55,.45);
+}
 @media (max-width:780px){
   /* 窄屏：开关变横向一行置顶，避免与圆盘/面板挤压遮挡 */
   .switch-col{flex-direction:row;flex-wrap:wrap;justify-content:center;align-items:center;
     flex:1 1 100%;max-width:560px;margin:0 auto}
   .sw-item{width:auto}
   .sw-all{width:auto;padding:3px 11px;margin:0 0 0 6px}
+  .switch-col .sb-title{flex:1 1 100%;margin:2px 0}
+  .sb-divider{flex:1 1 100%}
+  .pick-grid{flex:1 1 100%;max-width:300px;margin:4px auto 0}
+  .pick-ops{flex:1 1 100%}
+  .pick-ops .sw-all{margin:0}
 }
 .all-off-hint{
   text-align:center;font-weight:700;color:#ffc9a8;padding:12px 10px;
@@ -231,6 +261,17 @@ body{
     <span class="sb-title">显示开关</span>
     <!-- 关系开关由 JS 生成，状态自动记忆 -->
     <button type="button" class="sw-all" id="swAll">全开</button>
+
+    <hr class="sb-divider">
+    <span class="sb-title">地支筛选</span>
+    <label class="sw-item" style="--pc:var(--gold)" title="开启后：点击圆盘地支即为选支，只看所选地支之间的关系">
+      <input type="checkbox" id="pickMode"><span class="sw-ui"></span><span class="sw-name">启用筛选</span>
+    </label>
+    <div class="pick-grid" id="pickGrid"><!-- 12 支选钮由 JS 生成 --></div>
+    <div class="pick-ops">
+      <button type="button" class="sw-all" id="pickAll">全选</button>
+      <button type="button" class="sw-all" id="pickNone">清空</button>
+    </div>
   </aside>
 
   <section class="dial-wrap">
@@ -263,7 +304,8 @@ body{
 
 <footer class="app-footer">
   <b>提示</b>：日辰冲安静之爻即为「暗动（暗冲）」，所用即六冲之支，故不单列。
-  再点击已选中的地支可返回总表。开关状态自动记忆，下次打开保持上次设置。
+  再点击已选中的地支可返回总表。「地支筛选」开启后，点击圆盘地支即为选支，只看所选地支之间的关系。
+  开关与所选地支均自动记忆，下次打开保持上次设置。
 </footer>
 
 <script>
@@ -335,6 +377,25 @@ function saveVis(){
   try{ localStorage.setItem(LS_KEY, JSON.stringify(VIS)); }catch(e){ /* 忽略存储异常 */ }
 }
 
+/* ---------- 地支筛选状态（localStorage 记忆：是否启用 + 所选地支） ---------- */
+const LS_PICK = 'li-dizhi-rel-pick';
+function loadPick(){
+  // 默认未启用、未选支；有记录则按上次保存的状态恢复（过滤无效地支并去重）
+  try{
+    const saved = JSON.parse(localStorage.getItem(LS_PICK));
+    if(saved && typeof saved === 'object'){
+      const set = Array.isArray(saved.set)
+        ? [...new Set(saved.set.filter(x => ORDER.includes(x)))] : [];
+      return { on: !!saved.on, set };
+    }
+  }catch(e){ /* 存储不可用时静默降级为默认值 */ }
+  return { on: false, set: [] };
+}
+const PICK = loadPick();
+function savePick(){
+  try{ localStorage.setItem(LS_PICK, JSON.stringify(PICK)); }catch(e){ /* 忽略存储异常 */ }
+}
+
 // 两支之间的全部关系类型（自刑除外）
 function relTypesBetween(a, b){
   if(a === b) return [];
@@ -358,7 +419,12 @@ const panel = document.getElementById('panel');
 const panelBody = document.getElementById('panelBody');
 const switchCol = document.getElementById('switchCol');
 const swAllBtn = document.getElementById('swAll');
+const pickModeCb = document.getElementById('pickMode');
+const pickGrid = document.getElementById('pickGrid');
+const pickAllBtn = document.getElementById('pickAll');
+const pickNoneBtn = document.getElementById('pickNone');
 const NODES = {};
+const PICK_BTN = {};
 
 /* ---------- 显示开关栏：生成 + 事件 + 图例联动 ---------- */
 
@@ -381,7 +447,7 @@ switchCol.addEventListener('change', e => {
   VIS[t] = e.target.checked;
   saveVis();
   syncLegend();
-  select(sel); // 重新渲染当前视图
+  renderAll(); // 重新渲染当前视图（普通 / 筛选模式各自处理）
 });
 
 // 全开 / 全关
@@ -391,8 +457,48 @@ swAllBtn.addEventListener('click', () => {
   saveVis();
   switchCol.querySelectorAll('input[data-t]').forEach(cb => cb.checked = turnOn);
   syncLegend();
-  select(sel);
+  renderAll();
 });
+
+/* ---------- 地支筛选栏：生成 + 事件 ---------- */
+
+// 生成 12 个地支选钮（边框色对应该支五行色）
+ORDER.forEach(b => {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'pick';
+  btn.dataset.b = b;
+  btn.dataset.w = BR_BY[b].w;
+  btn.textContent = b;
+  btn.title = `${b} · ${BR_BY[b].y}${BR_BY[b].w} · 点击选入 / 移出`;
+  btn.addEventListener('click', () => togglePick(b));
+  pickGrid.appendChild(btn);
+  PICK_BTN[b] = btn;
+});
+
+// 启用 / 停用筛选模式
+pickModeCb.addEventListener('change', () => {
+  PICK.on = pickModeCb.checked;
+  savePick();
+  renderAll();
+});
+
+// 一键全选 / 清空所选地支
+pickAllBtn.addEventListener('click', () => { PICK.set = [...ORDER]; savePick(); renderAll(); });
+pickNoneBtn.addEventListener('click', () => { PICK.set = []; savePick(); renderAll(); });
+
+// 选入 / 移出单个地支
+function togglePick(b){
+  const i = PICK.set.indexOf(b);
+  if(i >= 0) PICK.set.splice(i, 1); else PICK.set.push(b);
+  savePick();
+  renderAll();
+}
+
+// 选钮高亮状态与 PICK 同步
+function syncPickBtns(){
+  ORDER.forEach(b => PICK_BTN[b].classList.toggle('on', PICK.set.includes(b)));
+}
 
 // 图例与「全开/全关」按钮文案随状态联动
 function syncLegend(){
@@ -413,16 +519,29 @@ ORDER.forEach(b => {
   el.title = `${b} · ${BR_BY[b].y}${BR_BY[b].w} · ${BR_BY[b].fw}方`;
   el.style.left = POS[b].x + '%';
   el.style.top = POS[b].y + '%';
-  el.addEventListener('click', () => select(sel === b ? null : b));
+  el.addEventListener('click', () => {
+    if(PICK.on) togglePick(b);                       // 筛选模式：点击即选入 / 移出
+    else select(sel === b ? null : b);               // 普通模式：查看单支关系
+  });
   dial.appendChild(el);
   NODES[b] = el;
 });
 
 let sel = null;
 
+// 清空全部节点的状态类与彩环（两种模式渲染前统一调用）
+function resetNodes(){
+  Object.values(NODES).forEach(n => {
+    n.classList.remove('sel', 'dim', 'pick-sel');
+    n.style.boxShadow = '';
+  });
+}
+
 function select(b){
   sel = b;
-  Object.values(NODES).forEach(n => { n.classList.remove('sel'); n.style.boxShadow = ''; });
+  resetNodes();
+  // 恢复默认悬浮提示（单支模式下相关支的提示会在下方按关系覆盖）
+  ORDER.forEach(x => { NODES[x].title = `${x} · ${BR_BY[x].y}${BR_BY[x].w} · ${BR_BY[x].fw}方`; });
   if(b){
     NODES[b].classList.add('sel');
     // 相关地支加彩色环（多重关系多层环）
@@ -492,6 +611,144 @@ function renderLines(b){
         }
       }
     }
+  }
+}
+
+/* ---------- 筛选模式：只看所选地支之间的关系 ---------- */
+
+// 筛选模式下「可见」的关系组：组内成员全部被选中才显示
+// （三合局、三刑须三支齐方成局 / 成刑，符合传统口径；自刑为本支选中即提示）
+function visibleGroups(){
+  const out = [];
+  for(const r of RELS){
+    if(!VIS[r.t]) continue; // 已关闭的关系类型不参与
+    for(const g of r.groups){
+      const u = [...new Set(g.m)];
+      if(u.every(x => PICK.set.includes(x))) out.push({ r, g, u });
+    }
+  }
+  return out;
+}
+
+// 筛选模式连线：为可见关系组画线 / 自刑画圈
+function renderPickLines(){
+  lineLayer.innerHTML = '';
+  lineLayer.classList.remove('dim-others');
+  for(const { r, u } of visibleGroups()){
+    if(u.length === 1){ // 自刑：节点外画虚线圈
+      const c = document.createElementNS(NS, 'circle');
+      c.setAttribute('cx', POS[u[0]].x); c.setAttribute('cy', POS[u[0]].y);
+      c.setAttribute('r', 7.2); c.setAttribute('class', 't-xing');
+      lineLayer.appendChild(c);
+      continue;
+    }
+    const pts = u.map(m => POS[m]);
+    for(let i = 0; i < pts.length; i++){
+      for(let j = i + 1; j < pts.length; j++){
+        const p = document.createElementNS(NS, 'path');
+        p.setAttribute('d', curvePath(pts[i], pts[j], r.bend));
+        p.setAttribute('class', 't-' + r.t);
+        lineLayer.appendChild(p);
+      }
+    }
+  }
+}
+
+// 筛选模式圆盘中心：显示已选支数与列表
+function renderPickCenter(){
+  const n = PICK.set.length;
+  dialCenter.innerHTML = n
+    ? `<div class="zh" style="font-size:23px">已选 ${n} 支</div>` +
+      `<div class="zi">${PICK.set.join(' ')}<br>点击地支可增删</div>`
+    : `<div class="zh" style="font-size:23px">选支</div>` +
+      `<div class="zi">点击圆盘地支<br>选出要看的支</div>`;
+}
+
+// 筛选模式右侧面板：按关系类型列出所选地支之间的关系
+function renderPickPanel(){
+  const picked = PICK.set;
+  let h = `<div class="hint-top">已选 ${picked.length} 支${picked.length ? '：' + picked.join('、') : ''}<br>` +
+          `圆盘点击地支可增删 —— 只看所选地支之间的关系</div>`;
+
+  if(!picked.length){
+    h += `<div class="all-off-hint">请先在圆盘上点击要查询的地支（至少选 2 支才有相互关系）<br>` +
+         `也可点左侧「全选」，再点掉不需要的地支</div>`;
+    panelBody.innerHTML = h;
+    return;
+  }
+  if(!RELS.some(r => VIS[r.t])){
+    h += `<div class="all-off-hint">🔒 所有关系类型均已关闭<br>请在上方「显示开关」中开启需要显示的关系</div>`;
+    panelBody.innerHTML = h;
+    return;
+  }
+
+  const groups = visibleGroups();
+  const pairGs = groups.filter(x => x.u.length > 1);
+  const selfGs = groups.filter(x => x.u.length === 1);
+
+  // 各关系类型分区（无符合的组则标「无」，便于逐一确认）
+  for(const r of RELS){
+    if(!VIS[r.t]) continue;
+    const hits = groups.filter(x => x.r === r);
+    const inner = hits.length
+      ? `<div class="pair-list">${hits.map(({ g, u }) => {
+          const txt = u.length === 1 ? `${u[0]}见${u[0]}` : u.join('');
+          const lab = (g.label && u.length > 1) ? `<i>${g.label}</i>` : '';
+          return `<span class="pair">${txt}${lab}</span>`;
+        }).join('')}</div>`
+      : `<div class="partners"><span class="none">无</span></div>`;
+    h += `<section class="rel-sec" data-t="${r.t}">
+      <h3><span class="dot" style="background:${r.color};color:${r.color}"></span>${r.name}
+          <span class="cnt">${hits.length ? hits.length + '组' : ''}</span></h3>
+      ${inner}
+      <p class="rdesc">${r.desc}</p>
+    </section>`;
+  }
+
+  if(!pairGs.length && !selfGs.length){
+    h += `<div class="all-off-hint">🕊 所选地支之间，在当前开启的关系类型中无直接关系</div>`;
+  }
+
+  // 多重关系提示（仅统计成员全在所选集合内的组）
+  const pairMap = {};
+  for(const { r, u } of pairGs){
+    for(let i = 0; i < u.length; i++){
+      for(let j = i + 1; j < u.length; j++){
+        const k = `${u[i]} ↔ ${u[j]}`;
+        (pairMap[k] = pairMap[k] || []).push(r.name);
+      }
+    }
+  }
+  const warns = Object.entries(pairMap).filter(([, v]) => v.length >= 2)
+    .map(([k, v]) => `「${k}」${v.join('＋')}`);
+  if(warns.length){
+    h += `<div class="multi-warn"><b>⚠ 多重关系提示：</b>${warns.join('；')} —— 合中带刑破，解卦须细辨。</div>`;
+  }
+  // 自刑提示：所选之支为自刑支，卦中须两见方成刑
+  if(selfGs.length){
+    h += `<div class="multi-warn"><b>※ 自刑：</b>${selfGs.map(x => x.u[0]).join('、')} 为自刑之支，卦中两见（如两${selfGs[0].u[0]}）方构成自刑。</div>`;
+  }
+  h += `<p class="foot-note">注：三合局、三刑须相关地支全部选中才会显示；开关与所选地支自动记忆。</p>`;
+  panelBody.innerHTML = h;
+}
+
+/* ---------- 统一渲染入口：按普通 / 筛选模式分发 ---------- */
+function renderAll(){
+  syncPickBtns();
+  pickModeCb.checked = PICK.on;
+  switchCol.classList.toggle('pick-on', PICK.on);
+  if(PICK.on){
+    resetNodes();
+    ORDER.forEach(b => {
+      const on = PICK.set.includes(b);
+      NODES[b].classList.add(on ? 'pick-sel' : 'dim');
+      NODES[b].title = on ? `${b} · 已选入，点击移出` : `${b} · 未选，点击加入`;
+    });
+    renderPickLines();
+    renderPickCenter();
+    renderPickPanel();
+  } else {
+    select(sel); // 普通模式：回到单支查询 / 总表
   }
 }
 
@@ -613,9 +870,9 @@ panel.addEventListener('mouseover', e => {
 });
 panel.addEventListener('mouseleave', clearLineFocus);
 
-/* ---------- 初始化：总表模式（开关状态由 localStorage 恢复） ---------- */
+/* ---------- 初始化：开关与筛选状态均由 localStorage 恢复 ---------- */
 syncLegend();
-select(null);
+renderAll();
 </script>
 </body>
 </html>
